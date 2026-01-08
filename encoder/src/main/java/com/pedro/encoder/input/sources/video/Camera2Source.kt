@@ -40,10 +40,10 @@ import com.pedro.encoder.input.video.facedetector.FaceDetectorCallback
  * Created by pedro on 11/1/24.
  */
 @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-class Camera2Source(context: Context): VideoSource() {
+class Camera2Source(context: Context, isFacing: Boolean = true): VideoSource() {
 
   private val camera = Camera2ApiManager(context)
-  private var facing = CameraHelper.Facing.BACK
+  private var facing = if (isFacing) CameraHelper.Facing.FRONT else CameraHelper.Facing.BACK
 
   override fun create(width: Int, height: Int, fps: Int, rotation: Int): Boolean {
     val result = checkResolutionSupported(width, height)
