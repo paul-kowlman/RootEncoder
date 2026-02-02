@@ -190,7 +190,7 @@ class Camera2ApiManager(context: Context) : CameraDevice.StateCallback() {
 
     @Throws(IllegalStateException::class, Exception::class)
     private fun drawSurface(cameraDevice: CameraDevice, surfaces: List<Surface>): CaptureRequest {
-        val builderInputSurface = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+        val builderInputSurface = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD)
         for (surface in surfaces) builderInputSurface.addTarget(surface)
         builderInputSurface.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
         val validFps = min(60, fps)
