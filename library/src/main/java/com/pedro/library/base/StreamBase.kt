@@ -119,7 +119,7 @@ abstract class StreamBase(
     rotation: Int = 0, profile: Int = -1, level: Int = -1,
     recordWidth: Int = 0, recordHeight: Int = 0, recordBitrate: Int = bitrate
   ): Boolean {
-    if (isStreaming || isRecording || isOnPreview) {
+    if (isRecording || isOnPreview) {
       throw IllegalStateException("Stream, record and preview must be stopped before prepareVideo")
     }
     differentRecordResolution = false
