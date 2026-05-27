@@ -253,6 +253,12 @@ abstract class StreamBase(
     return true
   }
 
+  fun reloadEncoders() {
+    stopSources()
+    prepareEncoders()
+    startSources()
+  }
+
   /**
    * Start record.
    *
