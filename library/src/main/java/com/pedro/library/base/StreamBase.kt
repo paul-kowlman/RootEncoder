@@ -119,7 +119,7 @@ abstract class StreamBase(
     rotation: Int = 0, profile: Int = -1, level: Int = -1,
     recordWidth: Int = 0, recordHeight: Int = 0, recordBitrate: Int = bitrate
   ): Boolean {
-    if (isStreaming || isRecording || isOnPreview) {
+    if (isRecording || isOnPreview) {
       throw IllegalStateException("Stream, record and preview must be stopped before prepareVideo")
     }
     differentRecordResolution = false
@@ -166,7 +166,7 @@ abstract class StreamBase(
   @JvmOverloads
   fun prepareAudio(sampleRate: Int, isStereo: Boolean, bitrate: Int, echoCanceler: Boolean = false,
     noiseSuppressor: Boolean = false): Boolean {
-    if (isStreaming || isRecording) {
+    if (isRecording) {
       throw IllegalStateException("Stream and record must be stopped before prepareAudio")
     }
     val audioResult = audioSource.init(sampleRate, isStereo, echoCanceler, noiseSuppressor)
