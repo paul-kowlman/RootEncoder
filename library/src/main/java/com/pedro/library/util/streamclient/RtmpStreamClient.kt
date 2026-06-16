@@ -206,6 +206,10 @@ class RtmpStreamClient(
     rtmpClient.setCustomAmfObject(amfObject)
   }
 
+  fun setCustomAmfUserArguments(amfObject: Map<String, Any>) {
+    rtmpClient.setCustomAmfUserArguments(amfObject)
+  }
+
   fun setCustomMetadataAmfObject(amfObject: Map<String, Any>) {
     rtmpClient.setCustomMetadataAmfObject(amfObject)
   }

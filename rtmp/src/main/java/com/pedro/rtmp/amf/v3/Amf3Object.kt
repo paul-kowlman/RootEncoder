@@ -74,6 +74,31 @@ open class Amf3Object(private val properties: HashMap<Amf3String, Amf3Data> = Li
     bodySize += value.getSize() + 1
   }
 
+  open fun setProperty(name: String, data: Any) {
+    val newValue: Amf3Data = when (data) {
+      is String   -> Amf3String(data)
+      is Int      -> Amf3Double(data.toDouble())
+      is Long     -> Amf3Double(data.toDouble())
+      is Double   -> Amf3Double(data)
+      is Float    -> Amf3Double(data.toDouble())
+      is Boolean  -> if (data) Amf3True() else Amf3False()
+      is Amf3Data -> data
+      else        -> throw IllegalArgumentException(
+        "Unsupported value type: ${data::class.java.name}"
+      )
+    }
+
+    val existingEntry = properties.entries.find { it.key.value == name }
+
+    if (existingEntry != null) {
+      properties[existingEntry.key] = newValue
+      bodySize += newValue.getSize() - existingEntry.value.getSize()
+    } else {
+      val key = Amf3String(name)
+      properties[key] = newValue
+      bodySize += key.getSize() + newValue.getSize() + 1
+    }
+  }
 
   override fun readBody(input: InputStream) {
     TODO("Not yet implemented")

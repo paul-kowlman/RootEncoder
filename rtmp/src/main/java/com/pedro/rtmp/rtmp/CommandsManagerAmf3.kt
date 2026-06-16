@@ -55,7 +55,21 @@ class CommandsManagerAmf3: CommandsManager() {
       }
     }
     connectInfo.setProperty("objectEncoding", 3.0)
+
+    // Inject other custom AMF fields as-is into the command object
+    customAmfObject.forEach { (key, value) ->
+      connectInfo.setProperty(key, value)
+    }
     connect.addData(connectInfo)
+
+    // Send custom AMF fields as a separate user_arguments object
+    if (customAmfUserArguments.isNotEmpty()) {
+      val userArguments = Amf3Object()
+      customAmfUserArguments.forEach { (key, value) ->
+        userArguments.setProperty(key, value)
+      }
+      connect.addData(userArguments)
+    }
 
     connect.writeHeader(socket)
     connect.writeBody(socket)
