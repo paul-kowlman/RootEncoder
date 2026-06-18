@@ -77,7 +77,10 @@ class CameraFragment: Fragment(), ConnectChecker {
 
   val genericStream: GenericStream by lazy {
     GenericStream(requireContext(), this).apply {
-      getGlInterface().autoHandleOrientation = true
+      // Disabled on purpose: autoHandleOrientation rotates the content inside the SAME fixed
+      // frame (letterboxing). We swap the real resolution instead via changeOrientationOnFly,
+      // so it must not fight with the sensor handler.
+      getGlInterface().autoHandleOrientation = false
     }
   }
   private lateinit var surfaceView: SurfaceView
@@ -168,11 +171,17 @@ class CameraFragment: Fragment(), ConnectChecker {
   }
 
   fun setOrientationMode(isVertical: Boolean) {
-    val wasOnPreview = genericStream.isOnPreview
-    genericStream.release()
     rotation = if (isVertical) 90 else 0
-    prepare()
-    if (wasOnPreview) genericStream.startPreview(surfaceView)
+    if (genericStream.isStreaming || genericStream.isRecording) {
+      // Swap 16:9 <-> 9:16 (or 4:3 <-> 3:4) mid-stream without dropping the connection.
+      genericStream.changeOrientationOnFly(rotation)
+    } else {
+      // Not streaming/recording yet: no socket to preserve, just re-prepare the encoders.
+      val wasOnPreview = genericStream.isOnPreview
+      genericStream.release()
+      prepare()
+      if (wasOnPreview) genericStream.startPreview(surfaceView)
+    }
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {

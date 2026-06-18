@@ -17,6 +17,7 @@
 package com.pedro.streamer.rotation
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
@@ -59,6 +60,7 @@ class RotationActivity : AppCompatActivity(), OnTouchListener {
   private var currentAudioSource: MenuItem? = null
   private var currentOrientation: MenuItem? = null
   private var currentFilter: MenuItem? = null
+  private var menu: Menu? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -67,7 +69,18 @@ class RotationActivity : AppCompatActivity(), OnTouchListener {
     supportFragmentManager.beginTransaction().add(R.id.container, cameraFragment).commit()
   }
 
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    // The manifest declares configChanges="orientation|...", so the Activity is not recreated.
+    // Swap the stream resolution to match the new orientation (no reconnect while streaming).
+    val isVertical = newConfig.orientation == Configuration.ORIENTATION_PORTRAIT
+    val item = if (isVertical) R.id.orientation_vertical else R.id.orientation_horizontal
+    currentOrientation = menu?.findItem(item)?.updateMenuColor(this, currentOrientation)
+    cameraFragment.setOrientationMode(isVertical)
+  }
+
   override fun onCreateOptionsMenu(menu: Menu): Boolean {
+    this.menu = menu
     menuInflater.inflate(R.menu.rotation_menu, menu)
     val defaultVideoSource = menu.findItem(R.id.video_source_camera2)
     val defaultAudioSource = menu.findItem(R.id.audio_source_microphone)

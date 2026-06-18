@@ -573,6 +573,67 @@ abstract class StreamBase(
    */
   fun resetAudioEncoder(): Boolean = audioEncoder.reset()
 
+  /**
+   * Switch the stream orientation while streaming/recording WITHOUT reconnecting (no socket drop).
+   *
+   * Unlike [setOrientation]/[GlStreamInterface.setStreamRotation] (which only rotate the content
+   * inside the SAME fixed output frame, producing letterboxing), this method reconfigures the
+   * VideoEncoder so the real output resolution swaps width/height. Keeping the same width/height
+   * from [prepareVideo] and toggling rotation 0 <-> 90 turns:
+   *  - 16:9 (e.g. 1920x1080) into 9:16 (1080x1920)
+   *  - 4:3  (e.g. 1440x1080) into 3:4  (1080x1440)
+   *
+   * The encoder is reset with [VideoEncoder.reset] (stop(false)/start(false)) so the timestamp
+   * timeline is preserved and the network socket stays open. The reconfigure emits a fresh
+   * SPS/PPS and a keyframe is requested, so the RTMP/SRT sender rebuilds the codec sequence header
+   * with the new resolution and players adapt mid-stream.
+   *
+   * Notes:
+   *  - Works without reconnecting on RTMP and SRT/TS. RTSP negotiates resolution in the SDP at
+   *    SETUP, so a mid-session change won't be reflected by most players there.
+   *  - If you use autoHandleOrientation in the GlInterface, disable it (or don't rely on it) and
+   *    call this method from your Activity orientation handler instead, otherwise both will fight.
+   *
+   * @param rotation new rotation, must be 0, 90, 180 or 270. 0/180 = landscape output,
+   *   90/270 = portrait output (width/height swapped).
+   * @return true if the encoder was reconfigured successfully, false otherwise.
+   */
+  fun changeOrientationOnFly(rotation: Int): Boolean {
+    if (!isStreaming && !isRecording) {
+      throw IllegalStateException("Stream or record must be running to change orientation on fly")
+    }
+    if (rotation % 90 != 0 || rotation < 0 || rotation >= 360) {
+      throw IllegalArgumentException("rotation must be 0, 90, 180 or 270")
+    }
+    val portrait = rotation == 90 || rotation == 270
+    // 1. reconfigure the dedicated record encoder first (if a different record resolution is used)
+    if (differentRecordResolution) {
+      glInterface.removeMediaCodecRecordSurface()
+      val recordWidth = videoEncoderRecord.width
+      val recordHeight = videoEncoderRecord.height
+      videoEncoderRecord.setRotation(rotation)
+      if (!videoEncoderRecord.reset()) return false
+      if (portrait) glInterface.setEncoderRecordSize(recordHeight, recordWidth)
+      else glInterface.setEncoderRecordSize(recordWidth, recordHeight)
+      glInterface.addMediaCodecRecordSurface(videoEncoderRecord.inputSurface)
+    }
+    // 2. reconfigure the stream encoder keeping width/height: rotation drives the W/H swap
+    val width = videoEncoder.width
+    val height = videoEncoder.height
+    glInterface.removeMediaCodecSurface()
+    videoEncoder.setRotation(rotation)
+    if (!videoEncoder.reset()) return false
+    // 3. update the GL output size (swapped for portrait) and content orientation
+    if (portrait) glInterface.setEncoderSize(height, width)
+    else glInterface.setEncoderSize(width, height)
+    glInterface.setIsPortrait(portrait)
+    glInterface.setCameraOrientation(if (rotation == 0) 270 else rotation - 90)
+    glInterface.addMediaCodecSurface(videoEncoder.inputSurface)
+    // 4. push a keyframe so the sender rebuilds the sequence header with the new resolution
+    requestKeyframe()
+    return true
+  }
+
   private fun prepareEncoders(): Boolean {
     if (differentRecordResolution) {
       val result = videoEncoderRecord.prepareVideoEncoder()
