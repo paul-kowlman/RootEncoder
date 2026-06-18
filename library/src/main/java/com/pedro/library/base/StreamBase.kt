@@ -101,16 +101,6 @@ abstract class StreamBase(
     onDestroyed = { if (isOnPreview) stopPreview(true) }
   )
 
-  init {
-    // When autoHandleOrientation is enabled and we are streaming/recording, swap the real output
-    // resolution (9:16 <-> 16:9) on the fly instead of letterboxing the content inside a fixed frame.
-    // The sensor orientation (0/90/180/270) maps to changeOrientationOnFly's rotation by +90 so that
-    // the resulting setCameraOrientation matches the default content-rotation path in GlStreamInterface.
-    glInterface.orientationChangeListener = { orientation, _ ->
-      if (isStreaming || isRecording) changeOrientationOnFly((orientation + 90) % 360) else false
-    }
-  }
-
   /**
    * Necessary only one time before start preview, stream or record.
    * If you want change values stop preview, stream and record is necessary.
@@ -601,9 +591,8 @@ abstract class StreamBase(
    * Notes:
    *  - Works without reconnecting on RTMP and SRT/TS. RTSP negotiates resolution in the SDP at
    *    SETUP, so a mid-session change won't be reflected by most players there.
-   *  - If autoHandleOrientation is enabled in the GlInterface, this method is called automatically
-   *    on every device rotation while streaming/recording, so you don't need to call it yourself.
-   *    Call it manually only when autoHandleOrientation is disabled.
+   *  - If you use autoHandleOrientation in the GlInterface, disable it (or don't rely on it) and
+   *    call this method from your Activity orientation handler instead, otherwise both will fight.
    *
    * @param rotation new rotation, must be 0, 90, 180 or 270. 0/180 = landscape output,
    *   90/270 = portrait output (width/height swapped).
