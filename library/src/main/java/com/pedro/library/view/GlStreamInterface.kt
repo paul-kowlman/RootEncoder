@@ -97,10 +97,21 @@ class GlStreamInterface(private val context: Context): OnFrameAvailableListener,
   private var streamViewPort: ViewPort? = null
   private var surfaceHandlerThread: HandlerThread? = null
 
+  /**
+   * Invoked when the device rotates while [autoHandleOrientation] is enabled. Receives the new
+   * sensor orientation (0, 90, 180 or 270) and whether it is portrait. If the listener handles the
+   * change (returns true) the default content rotation below is skipped, so the owner can instead
+   * reconfigure the encoder resolution on the fly. Defaults to null (only the content is rotated).
+   */
+  var orientationChangeListener: ((orientation: Int, isPortrait: Boolean) -> Boolean)? = null
+
   private val sensorRotationManager = SensorRotationManager(context, true, true) { orientation, isPortrait ->
     if (autoHandleOrientation && shouldHandleOrientation) {
-      setCameraOrientation(orientation)
-      setIsPortrait(isPortrait)
+      val handled = orientationChangeListener?.invoke(orientation, isPortrait) ?: false
+      if (!handled) {
+        setCameraOrientation(orientation)
+        setIsPortrait(isPortrait)
+      }
     }
   }
 
