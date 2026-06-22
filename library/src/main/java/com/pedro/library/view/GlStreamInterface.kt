@@ -400,7 +400,7 @@ class GlStreamInterface(private val context: Context): OnFrameAvailableListener,
   fun attachPreview(surface: Surface) {
     if (surfaceManager.isReady) {
       surfaceManagerPreview.release()
-      surfaceManagerPreview.eglSetup(surface, surfaceManager)
+      surfaceManagerPreview.eglSetupPreview(surface, surfaceManager)
     }
   }
 
@@ -421,7 +421,7 @@ class GlStreamInterface(private val context: Context): OnFrameAvailableListener,
       val h = if (config.height > 0) config.height else if (previewHeight == 0) encoderHeight else previewHeight
 
       val surfaceManager = SurfaceManager()
-      surfaceManager.eglSetup(surface, this@GlStreamInterface.surfaceManager)
+      surfaceManager.eglSetupPreview(surface, this@GlStreamInterface.surfaceManager)
       val finalConfig = MultiPreviewConfig(
         w,
         h,

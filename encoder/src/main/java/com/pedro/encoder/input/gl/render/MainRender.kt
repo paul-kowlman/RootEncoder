@@ -85,6 +85,14 @@ class MainRender {
       flipStreamHorizontal, viewPort)
   }
 
+  fun drawScreenSurfacePreview(
+    width: Int, height: Int, mode: AspectRatioMode, rotation: Int,
+    flipStreamVertical: Boolean, flipStreamHorizontal: Boolean, viewPort: ViewPort?
+  ) {
+    screenRender.drawSurfacePreview(width, height, mode, rotation, flipStreamVertical,
+      flipStreamHorizontal, viewPort)
+  }
+
   fun drawScreenPreview(
     width: Int, height: Int, isPortrait: Boolean,
     mode: AspectRatioMode, rotation: Int, flipStreamVertical: Boolean, flipStreamHorizontal: Boolean,

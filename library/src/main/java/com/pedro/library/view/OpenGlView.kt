@@ -235,7 +235,7 @@ open class OpenGlView : SurfaceView, GlInterface, OnFrameAvailableListener, Surf
             mainRender.drawSource()
             if (!limitFps) {
                 mainRender.drawFilters(true)
-                mainRender.drawScreen(
+                mainRender.drawScreenSurfacePreview(
                     previewWidth, previewHeight, aspectRatioMode, 0,
                     isPreviewVerticalFlip, isPreviewHorizontalFlip, null
                 )
@@ -319,7 +319,7 @@ open class OpenGlView : SurfaceView, GlInterface, OnFrameAvailableListener, Surf
         surfaceHandlerThread?.start()
         executor?.secureSubmit {
             surfaceManager.release()
-            surfaceManager.eglSetup(holder.surface)
+            surfaceManager.eglSetupPreview(holder.surface)
             surfaceManagerPhoto.release()
             surfaceManagerPhoto.eglSetup(encoderWidth, encoderHeight, surfaceManager)
             surfaceManager.makeCurrent()

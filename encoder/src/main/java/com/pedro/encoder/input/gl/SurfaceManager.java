@@ -78,6 +78,11 @@ public class SurfaceManager {
    * Prepares EGL.  We want a GLES 2.0 context and a surface that supports recording.
    */
   public void eglSetup(int width, int height, Surface surface, EGLContext eglSharedContext) {
+    eglSetup(width, height, surface, eglSharedContext, false);
+  }
+
+  private void eglSetup(int width, int height, Surface surface, EGLContext eglSharedContext,
+      boolean transparent) {
     if (isReady()) {
       Log.e(TAG, "already ready, ignored");
       return;
@@ -104,14 +109,23 @@ public class SurfaceManager {
               EGL14.EGL_NONE
       };
     } else if (eglSharedContext == null) {
-      attribList = new int[]{
-              EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
-              EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
-              /* AA https://stackoverflow.com/questions/27035893/antialiasing-in-opengl-es-2-0 */
-              //EGL14.EGL_SAMPLE_BUFFERS, 1 /* true */,
-              //EGL14.EGL_SAMPLES, 4, /* increase to more smooth limit of your GPU */
-              EGL14.EGL_NONE
-      };
+      if (transparent) {
+        attribList = new int[]{
+                EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_ALPHA_SIZE, 8,
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+                EGL14.EGL_NONE
+        };
+      } else {
+        attribList = new int[]{
+                EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+                /* AA https://stackoverflow.com/questions/27035893/antialiasing-in-opengl-es-2-0 */
+                //EGL14.EGL_SAMPLE_BUFFERS, 1 /* true */,
+                //EGL14.EGL_SAMPLES, 4, /* increase to more smooth limit of your GPU */
+                EGL14.EGL_NONE
+        };
+      }
     } else if (surface == null) {
       attribList = new int[] {
               EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
@@ -123,14 +137,23 @@ public class SurfaceManager {
               EGL14.EGL_NONE
       };
     } else {
-      attribList = new int[] {
-              EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
-              EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL_RECORDABLE_ANDROID, 1,
-              /* AA https://stackoverflow.com/questions/27035893/antialiasing-in-opengl-es-2-0 */
-              //EGL14.EGL_SAMPLE_BUFFERS, 1 /* true */,
-              //EGL14.EGL_SAMPLES, 4, /* increase to more smooth limit of your GPU */
-              EGL14.EGL_NONE
-      };
+      if (transparent) {
+        attribList = new int[] {
+                EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_ALPHA_SIZE, 8,
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL_RECORDABLE_ANDROID, 1,
+                EGL14.EGL_NONE
+        };
+      } else {
+        attribList = new int[] {
+                EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL_RECORDABLE_ANDROID, 1,
+                /* AA https://stackoverflow.com/questions/27035893/antialiasing-in-opengl-es-2-0 */
+                //EGL14.EGL_SAMPLE_BUFFERS, 1 /* true */,
+                //EGL14.EGL_SAMPLES, 4, /* increase to more smooth limit of your GPU */
+                EGL14.EGL_NONE
+        };
+      }
     }
     EGLConfig[] configs = new EGLConfig[1];
     int[] numConfigs = new int[1];
@@ -165,6 +188,20 @@ public class SurfaceManager {
 
   public void eglSetup(Surface surface, SurfaceManager manager) {
     eglSetup(2, 2, surface, manager.eglContext);
+  }
+
+  /**
+   * Prepares an EGL window surface with an alpha channel for preview composition.
+   */
+  public void eglSetupPreview(Surface surface, SurfaceManager manager) {
+    eglSetup(2, 2, surface, manager.eglContext, true);
+  }
+
+  /**
+   * Prepares a standalone EGL window surface with an alpha channel for preview composition.
+   */
+  public void eglSetupPreview(Surface surface) {
+    eglSetup(2, 2, surface, null, true);
   }
 
   public void eglSetup(int width, int height, SurfaceManager manager) {

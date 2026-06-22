@@ -99,7 +99,7 @@ public class ScreenRender {
     ViewPort viewport = viewPort != null ? viewPort : SizeCalculator.calculateViewPort(mode, width, height, streamWidth, streamHeight);
     GLES20.glViewport(viewport.getX(), viewport.getY(), viewport.getWidth(), viewport.getHeight());
 
-    draw();
+    draw(false);
   }
 
   public void drawEncoder(int width, int height, boolean isPortrait, int rotation,
@@ -110,7 +110,7 @@ public class ScreenRender {
     ViewPort viewport = viewPort != null ? viewPort : SizeCalculator.calculateViewPortEncoder(width, height, isPortrait);
     GLES20.glViewport(viewport.getX(), viewport.getY(), viewport.getWidth(), viewport.getHeight());
 
-    draw();
+    draw(false);
   }
 
   public void drawPreview(
@@ -134,11 +134,22 @@ public class ScreenRender {
     ViewPort viewport = viewPort != null ? viewPort: SizeCalculator.calculateViewPort(mode, width, height, w, h);
     GLES20.glViewport(viewport.getX(), viewport.getY(), viewport.getWidth(), viewport.getHeight());
 
-    draw();
+    draw(true);
   }
 
-  private void draw() {
-    GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+  public void drawSurfacePreview(int width, int height, AspectRatioMode mode, int rotation,
+      boolean flipStreamVertical, boolean flipStreamHorizontal, ViewPort viewPort) {
+    GlUtil.checkGlError("drawScreen start");
+
+    updateMatrix(rotation, SizeCalculator.calculateFlip(flipStreamHorizontal, flipStreamVertical), MVPMatrix);
+    ViewPort viewport = viewPort != null ? viewPort : SizeCalculator.calculateViewPort(mode, width, height, streamWidth, streamHeight);
+    GLES20.glViewport(viewport.getX(), viewport.getY(), viewport.getWidth(), viewport.getHeight());
+
+    draw(true);
+  }
+
+  private void draw(boolean transparent) {
+    GLES20.glClearColor(0.0f, 0.0f, 0.0f, transparent ? 0.0f : 1.0f);
     GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
 
     GLES20.glUseProgram(program);
