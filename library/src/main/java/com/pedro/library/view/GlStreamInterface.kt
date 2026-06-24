@@ -129,6 +129,22 @@ class GlStreamInterface(private val context: Context): OnFrameAvailableListener,
     return Point(encoderWidth, encoderHeight)
   }
 
+  /**
+   * Apply the current [encoderWidth]/[encoderHeight] (and record size) to the GL render targets
+   * while running, so a resolution change done on the fly (e.g. 16:9 <-> 9:16) is rendered at the
+   * new aspect instead of stretching the old FBO content into the new encoder surface.
+   * Call after updating the sizes with [setEncoderSize]/[setEncoderRecordSize]. No-op if not running.
+   */
+  fun applyEncoderSizeToRender() {
+    executor?.submit {
+      if (surfaceManager.isReady && mainRender.isReady() && surfaceManager.makeCurrent()) {
+        val width = max(encoderWidth, encoderRecordWidth)
+        val height = max(encoderHeight, encoderRecordHeight)
+        mainRender.setEncoderSize(width, height)
+      }
+    }
+  }
+
   override fun muteVideo() {
     muteVideo = true
   }

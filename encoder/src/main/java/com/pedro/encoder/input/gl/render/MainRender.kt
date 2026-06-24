@@ -57,6 +57,20 @@ class MainRender {
 
   fun isReady(): Boolean = running.get()
 
+  /**
+   * Resize the render pipeline to a new encoded resolution while running (e.g. swapping
+   * 16:9 <-> 9:16 on the fly). Reallocates the camera and filter FBOs and updates the screen
+   * render stream size so the camera frame is rendered at the new aspect instead of being stretched
+   * from the old one. Must be called on the GL thread with a current EGL context.
+   */
+  fun setEncoderSize(encoderWidth: Int, encoderHeight: Int) {
+    width = encoderWidth
+    height = encoderHeight
+    cameraRender.setEncoderSize(encoderWidth, encoderHeight)
+    filterRenders.forEach { it.setEncoderSize(encoderWidth, encoderHeight) }
+    screenRender.setStreamSize(encoderWidth, encoderHeight)
+  }
+
   fun drawSource() {
     cameraRender.draw()
   }

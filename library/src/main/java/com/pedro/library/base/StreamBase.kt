@@ -617,30 +617,32 @@ abstract class StreamBase(
       throw IllegalArgumentException("rotation must be 0, 90, 180 or 270")
     }
     val portrait = rotation == 90 || rotation == 270
-    // 1. reconfigure the dedicated record encoder first (if a different record resolution is used)
-    if (differentRecordResolution) {
-      glInterface.removeMediaCodecRecordSurface()
-      val recordWidth = videoEncoderRecord.width
-      val recordHeight = videoEncoderRecord.height
-      videoEncoderRecord.setRotation(rotation)
-      if (!videoEncoderRecord.reset()) return false
-      if (portrait) glInterface.setEncoderRecordSize(recordHeight, recordWidth)
-      else glInterface.setEncoderRecordSize(recordWidth, recordHeight)
-      glInterface.addMediaCodecRecordSurface(videoEncoderRecord.inputSurface)
-    }
-    // 2. reconfigure the stream encoder keeping width/height: rotation drives the W/H swap
-    val width = videoEncoder.width
-    val height = videoEncoder.height
+    // 1. detach the encoder input surfaces before reconfiguring the encoders
     glInterface.removeMediaCodecSurface()
+    if (differentRecordResolution) glInterface.removeMediaCodecRecordSurface()
+    // 2. reconfigure the stream encoder keeping the prepared width/height: rotation drives the W/H
+    //    swap inside prepareVideoEncoder (e.g. 1920x1080 <-> 1080x1920).
     videoEncoder.setRotation(rotation)
     if (!videoEncoder.reset()) return false
-    // 3. update the GL output size (swapped for portrait) and content orientation
-    if (portrait) glInterface.setEncoderSize(height, width)
-    else glInterface.setEncoderSize(width, height)
+    if (portrait) glInterface.setEncoderSize(videoEncoder.height, videoEncoder.width)
+    else glInterface.setEncoderSize(videoEncoder.width, videoEncoder.height)
+    // 3. reconfigure the dedicated record encoder the same way (if a different record resolution is used)
+    if (differentRecordResolution) {
+      videoEncoderRecord.setRotation(rotation)
+      if (!videoEncoderRecord.reset()) return false
+      if (portrait) glInterface.setEncoderRecordSize(videoEncoderRecord.height, videoEncoderRecord.width)
+      else glInterface.setEncoderRecordSize(videoEncoderRecord.width, videoEncoderRecord.height)
+    }
+    // 4. update content orientation AND resize the GL render targets (camera/filter FBOs) to the new
+    //    resolution. Without the resize the camera frame keeps being rendered at the old aspect and
+    //    gets stretched into the new encoder surface, so the switch looks distorted.
     glInterface.setIsPortrait(portrait)
     glInterface.setCameraOrientation(if (rotation == 0) 270 else rotation - 90)
+    glInterface.applyEncoderSizeToRender()
+    // 5. re-attach the new encoder input surfaces and push a keyframe so the sender rebuilds the
+    //    sequence header with the new resolution.
     glInterface.addMediaCodecSurface(videoEncoder.inputSurface)
-    // 4. push a keyframe so the sender rebuilds the sequence header with the new resolution
+    if (differentRecordResolution) glInterface.addMediaCodecRecordSurface(videoEncoderRecord.inputSurface)
     requestKeyframe()
     return true
   }

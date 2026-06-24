@@ -63,6 +63,16 @@ public abstract class BaseFilterRender extends BaseRenderOffScreen {
         renderHandler.getTexId());
   }
 
+  /**
+   * Resize this filter's FBO to follow a new encoded resolution (e.g. swapping 16:9 <-> 9:16 on the
+   * fly). Reuses the existing GL ids. Must be called on the GL thread with a current EGL context.
+   */
+  public void setEncoderSize(int width, int height) {
+    this.width = width;
+    this.height = height;
+    updateFBOSize(width, height, renderHandler.getRboId(), renderHandler.getTexId());
+  }
+
   protected abstract void initGlFilter(Context context);
 
   public void draw() {

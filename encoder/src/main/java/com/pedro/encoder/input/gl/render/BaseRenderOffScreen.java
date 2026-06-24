@@ -64,6 +64,29 @@ public abstract class BaseRenderOffScreen {
         renderHandler.getTexId());
   }
 
+  /**
+   * Reallocate the storage of the already created FBO (color texture + depth renderbuffer) for a
+   * new size, reusing the same GL ids. This keeps texId/fboId stable (no need to re-point the
+   * consumers that sample this texture) and leaks nothing. Must be called with a current EGL
+   * context (GL thread). Used to switch the encoded resolution on the fly without recreating the
+   * whole render pipeline.
+   */
+  protected void updateFBOSize(int width, int height) {
+    updateFBOSize(width, height, renderHandler.getRboId(), renderHandler.getTexId());
+  }
+
+  protected void updateFBOSize(int width, int height, int[] rboId, int[] texId) {
+    GlUtil.checkGlError("updateFBOSize_S");
+    GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, rboId[0]);
+    GLES20.glRenderbufferStorage(GLES20.GL_RENDERBUFFER, GLES20.GL_DEPTH_COMPONENT16, width, height);
+    GLES20.glBindRenderbuffer(GLES20.GL_RENDERBUFFER, 0);
+    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId[0]);
+    GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, width, height, 0, GLES20.GL_RGBA,
+        GLES20.GL_UNSIGNED_BYTE, null);
+    GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+    GlUtil.checkGlError("updateFBOSize_E");
+  }
+
   protected void initFBO(int width, int height, int[] fboId, int[] rboId, int[] texId) {
     GlUtil.checkGlError("initFBO_S");
 

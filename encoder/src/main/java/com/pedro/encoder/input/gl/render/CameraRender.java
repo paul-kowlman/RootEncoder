@@ -131,6 +131,18 @@ public class CameraRender extends BaseRenderOffScreen {
     if (surface != null) surface.release();
   }
 
+  /**
+   * Resize the offscreen FBO this render draws the camera frame into, to follow a new encoded
+   * resolution (e.g. when swapping 16:9 <-> 9:16 on the fly). The camera input buffer size is not
+   * touched here: the camera keeps capturing at its original resolution and only the GL render
+   * target changes shape. Must be called on the GL thread with a current EGL context.
+   */
+  public void setEncoderSize(int width, int height) {
+    this.width = width;
+    this.height = height;
+    updateFBOSize(width, height);
+  }
+
   public void updateTexImage() {
     surfaceTexture.updateTexImage();
   }
