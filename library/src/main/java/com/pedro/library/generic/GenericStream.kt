@@ -156,6 +156,10 @@ class GenericStream(
     udpClient.setVideoInfo(sps, pps, vps)
   }
 
+  override fun onVideoResolutionChangedImp(width: Int, height: Int) {
+    if (connectedType == ClientType.RTMP) rtmpClient.resendVideoResolution(width, height)
+  }
+
   override fun getVideoDataImp(videoBuffer: ByteBuffer, info: MediaCodec.BufferInfo) {
     when (connectedType) {
       ClientType.RTMP -> rtmpClient.sendVideo(videoBuffer, info)

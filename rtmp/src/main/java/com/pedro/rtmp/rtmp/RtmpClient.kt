@@ -226,6 +226,24 @@ class RtmpClient(private val connectChecker: ConnectChecker) {
     commandsManager.setVideoResolution(width, height)
   }
 
+  /**
+   * Update the advertised video resolution and re-send the onMetaData (@setDataFrame) mid-stream.
+   * Useful after a live resolution change (e.g. 16:9 <-> 9:16) so players that read the resolution
+   * from metadata, not only from the coded SPS, can pick up the new frame size. All socket writes
+   * are serialized by the CommandsManager write mutex, so this is safe to call while the sender is
+   * actively publishing.
+   */
+  fun resendVideoResolution(width: Int, height: Int) {
+    commandsManager.setVideoResolution(width, height)
+    val currentSocket = socket
+    if (!isStreaming || !publishPermitted || currentSocket == null) return
+    scope.launch {
+      runCatching { commandsManager.sendMetadata(currentSocket) }.exceptionOrNull()?.let {
+        Log.e(TAG, "resend metadata failed", it)
+      }
+    }
+  }
+
   fun setFps(fps: Int) {
     commandsManager.fps = fps
   }

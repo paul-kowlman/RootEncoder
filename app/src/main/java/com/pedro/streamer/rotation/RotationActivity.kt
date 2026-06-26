@@ -142,6 +142,14 @@ class RotationActivity : AppCompatActivity(), OnTouchListener {
           currentOrientation = item.updateMenuColor(this, currentOrientation)
           cameraFragment.setOrientationMode(true)
         }
+        R.id.rotation_mode_live -> {
+          cameraFragment.rotationMode = CameraFragment.RotationMode.LIVE_SWAP
+          toast("Rotation mode: live resolution swap")
+        }
+        R.id.rotation_mode_fixed -> {
+          cameraFragment.rotationMode = CameraFragment.RotationMode.FIXED_CANVAS
+          toast("Rotation mode: fixed canvas (letterbox)")
+        }
         else -> {
           val result = filterMenu.onOptionsItemSelected(item, cameraFragment.genericStream.getGlInterface())
           if (result) currentFilter = item.updateMenuColor(this, currentFilter)

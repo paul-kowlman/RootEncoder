@@ -644,6 +644,10 @@ abstract class StreamBase(
     glInterface.addMediaCodecSurface(videoEncoder.inputSurface)
     if (differentRecordResolution) glInterface.addMediaCodecRecordSurface(videoEncoderRecord.inputSurface)
     requestKeyframe()
+    // Re-advertise the new output resolution to the protocol (e.g. RTMP onMetaData) so players that
+    // read it from metadata, not only from the coded SPS, can adapt to the mid-stream change.
+    val size = glInterface.getEncoderSize()
+    onVideoResolutionChangedImp(size.x, size.y)
     return true
   }
 
@@ -698,6 +702,12 @@ abstract class StreamBase(
   }
 
   protected abstract fun onAudioInfoImp(sampleRate: Int, isStereo: Boolean)
+  /**
+   * Called when the output resolution changes while streaming (see [changeOrientationOnFly]).
+   * Protocols that advertise the resolution in metadata (RTMP onMetaData) should re-send it here.
+   * Default is a no-op for protocols where it does not apply.
+   */
+  protected open fun onVideoResolutionChangedImp(width: Int, height: Int) {}
   protected abstract fun startStreamImp(endPoint: String)
   protected abstract fun stopStreamImp()
   protected abstract fun onVideoInfoImp(sps: ByteBuffer, pps: ByteBuffer?, vps: ByteBuffer?)

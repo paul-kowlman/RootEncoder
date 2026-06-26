@@ -84,6 +84,10 @@ class RtmpStream(
     rtmpClient.setVideoInfo(sps, pps, vps)
   }
 
+  override fun onVideoResolutionChangedImp(width: Int, height: Int) {
+    rtmpClient.resendVideoResolution(width, height)
+  }
+
   override fun getVideoDataImp(videoBuffer: ByteBuffer, info: MediaCodec.BufferInfo) {
     rtmpClient.sendVideo(videoBuffer, info)
   }

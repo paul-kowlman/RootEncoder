@@ -17,6 +17,7 @@
 package com.pedro.streamer.rotation
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -88,6 +89,10 @@ class CameraFragment: Fragment(), ConnectChecker {
   private lateinit var txtBitrate: TextView
   val width = 640
   val height = 480
+
+  // How a device rotation is applied to the live stream. Toggle from the menu (Rotation mode).
+  enum class RotationMode { LIVE_SWAP, FIXED_CANVAS }
+  var rotationMode = RotationMode.FIXED_CANVAS
   val vBitrate = 1200 * 1000
   private var rotation = 0
   private val sampleRate = 32000
@@ -173,8 +178,23 @@ class CameraFragment: Fragment(), ConnectChecker {
   fun setOrientationMode(isVertical: Boolean) {
     rotation = if (isVertical) 90 else 0
     if (genericStream.isStreaming || genericStream.isRecording) {
-      // Swap 16:9 <-> 9:16 (or 4:3 <-> 3:4) mid-stream without dropping the connection.
-      genericStream.changeOrientationOnFly(rotation)
+      when (rotationMode) {
+        RotationMode.LIVE_SWAP -> {
+          // Live resolution swap 16:9 <-> 9:16 mid-stream without dropping the connection.
+          // Requires the receiver/player to re-read the resolution mid-stream (RTMP onMetaData +
+          // new SPS are re-sent). Some CDNs/players ignore that and keep the initial canvas.
+          genericStream.changeOrientationOnFly(rotation)
+        }
+        RotationMode.FIXED_CANVAS -> {
+          // §8 FALLBACK: fixed encoded canvas. The stream resolution NEVER changes (it stays
+          // whatever prepareVideo set at start), so no CDN/player resolution re-negotiation is
+          // needed - works even on players that ignore mid-stream changes (e.g. Stripchat).
+          // We only rotate the camera content and letterbox/pillarbox it inside the fixed frame.
+          val gl = genericStream.getGlInterface()
+          gl.setCameraOrientation(if (rotation == 0) 270 else rotation - 90)
+          gl.setIsPortrait(isVertical)
+        }
+      }
     } else {
       // Not streaming/recording yet: no socket to preserve, just re-prepare the encoders.
       val wasOnPreview = genericStream.isOnPreview
@@ -186,6 +206,10 @@ class CameraFragment: Fragment(), ConnectChecker {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    // onConfigurationChanged only fires on a CHANGE, not at launch, so sync the initial rotation to
+    // how the device is currently held. Otherwise the encoder always starts landscape (rotation=0)
+    // even in portrait and the preview shows a letterboxed band in the middle.
+    rotation = if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 90 else 0
     prepare()
     genericStream.getStreamClient().setReTries(10)
   }

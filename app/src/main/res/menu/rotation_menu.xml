@@ -48,6 +48,18 @@
                 />
         </menu>
     </item>
+    <item android:title="Rotation mode">
+        <menu>
+            <item
+                android:title="Live swap (resolution)"
+                android:id="@+id/rotation_mode_live"
+                />
+            <item
+                android:title="Fixed canvas (letterbox)"
+                android:id="@+id/rotation_mode_fixed"
+                />
+        </menu>
+    </item>
     <item
         android:title="@string/filters"
         >
