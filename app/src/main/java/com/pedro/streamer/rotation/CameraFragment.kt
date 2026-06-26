@@ -20,6 +20,8 @@ import android.annotation.SuppressLint
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.SurfaceHolder
 import android.view.SurfaceView
@@ -87,14 +89,23 @@ class CameraFragment: Fragment(), ConnectChecker {
   private lateinit var surfaceView: SurfaceView
   private lateinit var bStartStop: ImageView
   private lateinit var txtBitrate: TextView
-  val width = 640
-  val height = 480
+  val width = 1280
+  val height = 720
 
   // How a device rotation is applied to the live stream. Toggle from the menu (Rotation mode).
   enum class RotationMode { LIVE_SWAP, FIXED_CANVAS }
   var rotationMode = RotationMode.FIXED_CANVAS
   val vBitrate = 1200 * 1000
   private var rotation = 0
+  // Anti-jitter (hysteresis) for the live-swap path: each swap does a blocking encoder reset, so a
+  // noisy/oscillating orientation sensor would reset the encoder repeatedly (freeze->recover loop).
+  // We only commit a swap once the new orientation has stayed put for liveSwapStabilityMs, drop a
+  // swap that reverts within that window, and never reset to the orientation already applied.
+  private val liveSwapHandler = Handler(Looper.getMainLooper())
+  private var pendingLiveSwap: Runnable? = null
+  private val liveSwapStabilityMs = 800L
+  // Rotation currently applied to the live encoder (-1 until the first stream start sets it).
+  private var appliedSwapRotation = -1
   private val sampleRate = 32000
   private val isStereo = true
   private val aBitrate = 128 * 1000
@@ -138,6 +149,11 @@ class CameraFragment: Fragment(), ConnectChecker {
 
     bStartStop.setOnClickListener {
       if (!genericStream.isStreaming) {
+        // The stream starts with the encoder prepared at the current rotation; seed the hysteresis
+        // baseline so the first live swap only fires on a genuine change from here.
+        appliedSwapRotation = rotation
+        pendingLiveSwap?.let { liveSwapHandler.removeCallbacks(it) }
+        pendingLiveSwap = null
         genericStream.startStream(etUrl.text.toString())
         bStartStop.setImageResource(R.drawable.stream_stop_icon)
       } else {
@@ -183,7 +199,22 @@ class CameraFragment: Fragment(), ConnectChecker {
           // Live resolution swap 16:9 <-> 9:16 mid-stream without dropping the connection.
           // Requires the receiver/player to re-read the resolution mid-stream (RTMP onMetaData +
           // new SPS are re-sent). Some CDNs/players ignore that and keep the initial canvas.
-          genericStream.changeOrientationOnFly(rotation)
+          val target = rotation
+          // Always cancel a not-yet-committed swap: the orientation changed again before it settled.
+          pendingLiveSwap?.let { liveSwapHandler.removeCallbacks(it) }
+          pendingLiveSwap = null
+          // Already at this orientation (e.g. flipped away and back before committing) -> nothing to do.
+          if (target == appliedSwapRotation) return
+          // Hysteresis: only reset the encoder once this orientation has held for the stability window.
+          val runnable = Runnable {
+            pendingLiveSwap = null
+            if ((genericStream.isStreaming || genericStream.isRecording) && target != appliedSwapRotation) {
+              genericStream.changeOrientationOnFly(target)
+              appliedSwapRotation = target
+            }
+          }
+          pendingLiveSwap = runnable
+          liveSwapHandler.postDelayed(runnable, liveSwapStabilityMs)
         }
         RotationMode.FIXED_CANVAS -> {
           // §8 FALLBACK: fixed encoded canvas. The stream resolution NEVER changes (it stays
@@ -197,6 +228,9 @@ class CameraFragment: Fragment(), ConnectChecker {
       }
     } else {
       // Not streaming/recording yet: no socket to preserve, just re-prepare the encoders.
+      pendingLiveSwap?.let { liveSwapHandler.removeCallbacks(it) }
+      pendingLiveSwap = null
+      appliedSwapRotation = rotation
       val wasOnPreview = genericStream.isOnPreview
       genericStream.release()
       prepare()
@@ -229,6 +263,7 @@ class CameraFragment: Fragment(), ConnectChecker {
 
   override fun onDestroy() {
     super.onDestroy()
+    pendingLiveSwap?.let { liveSwapHandler.removeCallbacks(it) }
     genericStream.release()
   }
 

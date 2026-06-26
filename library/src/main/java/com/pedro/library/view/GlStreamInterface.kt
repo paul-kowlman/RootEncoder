@@ -68,15 +68,20 @@ class GlStreamInterface(private val context: Context): OnFrameAvailableListener,
   private val multiPreviewSurfaceManagers = ConcurrentHashMap<Surface, PreviewSurfaceInfo>()
   private val mainRender = MainRender()
 
-  private var encoderWidth = 0
-  private var encoderHeight = 0
-  private var encoderRecordWidth = 0
-  private var encoderRecordHeight = 0
-  private var streamOrientation = 0
+  // Written from the caller thread (changeOrientationOnFly) and read on the GL executor thread
+  // (draw / applyEncoderSizeToRender), so they must be @Volatile to publish the new values safely.
+  @Volatile private var encoderWidth = 0
+  @Volatile private var encoderHeight = 0
+  @Volatile private var encoderRecordWidth = 0
+  @Volatile private var encoderRecordHeight = 0
+  @Volatile private var streamOrientation = 0
   private var previewOrientation = 0
   private var previewWidth = 0
   private var previewHeight = 0
-  private var isPortrait = false
+  @Volatile private var isPortrait = false
+  // True while a live orientation/resolution swap is being applied. While set, draw() stops feeding
+  // the video encoder so it never latches a half-updated (mismatched size/FBO) "cross" frame.
+  private val switching = AtomicBoolean(false)
   private var isPortraitPreview = false
   private var orientationForced = OrientationForced.NONE
   private val filterQueue: BlockingQueue<Filter> = LinkedBlockingQueue()
@@ -143,6 +148,25 @@ class GlStreamInterface(private val context: Context): OnFrameAvailableListener,
         mainRender.setEncoderSize(width, height)
       }
     }
+  }
+
+  /**
+   * Open a live orientation/resolution swap window. Call BEFORE detaching the encoder surface and
+   * mutating the sizes. While open, [draw] skips rendering into the encoder surface(s) so no
+   * intermediate, half-updated frame (wrong size / un-resized FBO) reaches the encoder.
+   */
+  fun beginSwitch() {
+    switching.set(true)
+  }
+
+  /**
+   * Close the swap window. Submitted to the GL executor so the gate is released only AFTER every
+   * task queued during the swap (FBO resize, re-attach surface) has run — at which point the size,
+   * portrait flag and FBO are all consistent again and encoder rendering can safely resume.
+   */
+  fun endSwitch() {
+    val cleared = executor?.submit { switching.set(false) }
+    if (cleared == null) switching.set(false) // not running: nothing queued, release immediately
   }
 
   override fun muteVideo() {
@@ -303,11 +327,14 @@ class GlStreamInterface(private val context: Context): OnFrameAvailableListener,
       OrientationForced.LANDSCAPE -> false
       OrientationForced.NONE -> isPortraitPreview
     }
+    // While a live orientation swap is in progress the size/portrait/FBO state is being updated
+    // across threads; skip feeding the encoder so it never latches a mismatched ("cross") frame.
+    val isSwitching = switching.get()
     if (surfaceManagerEncoder.isReady || surfaceManagerEncoderRecord.isReady || surfaceManagerPhoto.isReady) {
       mainRender.drawFilters(false)
     }
     // render VideoEncoder (stream and record)
-    if (surfaceManagerEncoder.isReady && mainRender.isReady() && !limitFps) {
+    if (surfaceManagerEncoder.isReady && mainRender.isReady() && !limitFps && !isSwitching) {
       val w = if (muteVideo) 0 else encoderWidth
       val h = if (muteVideo) 0 else encoderHeight
       if (surfaceManagerEncoder.makeCurrent()) {
@@ -318,7 +345,7 @@ class GlStreamInterface(private val context: Context): OnFrameAvailableListener,
       }
     }
     // render VideoEncoder (record if the resolution is different than stream)
-    if (surfaceManagerEncoderRecord.isReady && mainRender.isReady() && !limitFps) {
+    if (surfaceManagerEncoderRecord.isReady && mainRender.isReady() && !limitFps && !isSwitching) {
       val w = if (muteVideo) 0 else encoderRecordWidth
       val h = if (muteVideo) 0 else encoderRecordHeight
       if (surfaceManagerEncoderRecord.makeCurrent()) {

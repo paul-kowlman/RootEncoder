@@ -52,6 +52,7 @@ import com.pedro.library.util.streamclient.StreamBaseClient
 import com.pedro.library.view.GlStreamInterface
 import com.pedro.library.view.preview.MultiPreviewConfig
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 
 
@@ -609,6 +610,13 @@ abstract class StreamBase(
    *   90/270 = portrait output (width/height swapped).
    * @return true if the encoder was reconfigured successfully, false otherwise.
    */
+  // A live swap does a blocking encoder reset (stop -> reconfigure -> start). Guard against
+  // overlapping swaps: if one is already running, just remember the latest requested rotation and
+  // let the in-flight swap apply it when it finishes, instead of stacking blocking resets (which
+  // freezes the stream on rapid flips). -1 = nothing pending.
+  private val switchInProgress = AtomicBoolean(false)
+  @Volatile private var pendingRotation: Int = -1
+
   fun changeOrientationOnFly(rotation: Int): Boolean {
     if (!isStreaming && !isRecording) {
       throw IllegalStateException("Stream or record must be running to change orientation on fly")
@@ -616,20 +624,50 @@ abstract class StreamBase(
     if (rotation % 90 != 0 || rotation < 0 || rotation >= 360) {
       throw IllegalArgumentException("rotation must be 0, 90, 180 or 270")
     }
+    if (!switchInProgress.compareAndSet(false, true)) {
+      // A swap is already running; coalesce to the most recent target and bail out.
+      pendingRotation = rotation
+      return true
+    }
+    var result = false
+    try {
+      result = applyOrientationSwap(rotation)
+    } finally {
+      switchInProgress.set(false)
+      // Apply the latest coalesced rotation (if it differs) once the current swap has finished.
+      val pending = pendingRotation
+      pendingRotation = -1
+      if (pending != -1 && pending != rotation && (isStreaming || isRecording)) {
+        changeOrientationOnFly(pending)
+      }
+    }
+    return result
+  }
+
+  private fun applyOrientationSwap(rotation: Int): Boolean {
     val portrait = rotation == 90 || rotation == 270
+    // 0. open the swap window: draw() stops feeding the encoder so it can't latch a half-updated
+    //    (mismatched size / un-resized FBO) "cross" frame while we reconfigure across threads.
+    glInterface.beginSwitch()
     // 1. detach the encoder input surfaces before reconfiguring the encoders
     glInterface.removeMediaCodecSurface()
     if (differentRecordResolution) glInterface.removeMediaCodecRecordSurface()
     // 2. reconfigure the stream encoder keeping the prepared width/height: rotation drives the W/H
     //    swap inside prepareVideoEncoder (e.g. 1920x1080 <-> 1080x1920).
     videoEncoder.setRotation(rotation)
-    if (!videoEncoder.reset()) return false
+    if (!videoEncoder.reset()) {
+      glInterface.endSwitch()
+      return false
+    }
     if (portrait) glInterface.setEncoderSize(videoEncoder.height, videoEncoder.width)
     else glInterface.setEncoderSize(videoEncoder.width, videoEncoder.height)
     // 3. reconfigure the dedicated record encoder the same way (if a different record resolution is used)
     if (differentRecordResolution) {
       videoEncoderRecord.setRotation(rotation)
-      if (!videoEncoderRecord.reset()) return false
+      if (!videoEncoderRecord.reset()) {
+        glInterface.endSwitch()
+        return false
+      }
       if (portrait) glInterface.setEncoderRecordSize(videoEncoderRecord.height, videoEncoderRecord.width)
       else glInterface.setEncoderRecordSize(videoEncoderRecord.width, videoEncoderRecord.height)
     }
@@ -639,10 +677,13 @@ abstract class StreamBase(
     glInterface.setIsPortrait(portrait)
     glInterface.setCameraOrientation(if (rotation == 0) 270 else rotation - 90)
     glInterface.applyEncoderSizeToRender()
-    // 5. re-attach the new encoder input surfaces and push a keyframe so the sender rebuilds the
-    //    sequence header with the new resolution.
+    // 5. re-attach the new encoder input surfaces, then close the swap window (queued AFTER the
+    //    re-attach, so encoder rendering only resumes once size, portrait flag and FBO are all
+    //    consistent), and push a keyframe so the sender rebuilds the sequence header with the new
+    //    resolution.
     glInterface.addMediaCodecSurface(videoEncoder.inputSurface)
     if (differentRecordResolution) glInterface.addMediaCodecRecordSurface(videoEncoderRecord.inputSurface)
+    glInterface.endSwitch()
     requestKeyframe()
     // Re-advertise the new output resolution to the protocol (e.g. RTMP onMetaData) so players that
     // read it from metadata, not only from the coded SPS, can adapt to the mid-stream change.
